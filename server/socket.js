@@ -23,24 +23,33 @@ export function initSocket(server) {
 
       switch (type) {
         case 'room:create': {
-          const room = rooms.create(userId, ws);
+          if (!msg.userName?.trim()) {
+            send(ws, { type: 'error', message: 'Name is required to create a room' });
+            return;
+          }
+          const room = rooms.create(userId, msg.userName.trim(), ws);
           currentRoomId = room.id;
-          send(ws, { type: 'room:created', roomId: room.id, members: 1 });
+          send(ws, { type: 'room:created', roomId: room.id, members: 1, hostId: room.hostId, hostName: room.names.get(room.hostId) });
           console.log(`[WS] Room created: ${room.id} by ${userId}`);
           break;
         }
 
         case 'room:join': {
+          if (!msg.userName?.trim()) {
+            send(ws, { type: 'error', message: 'Name is required to join a room' });
+            return;
+          }
           const room = rooms.get(roomId?.toUpperCase());
           if (!room) {
             send(ws, { type: 'error', message: `Room "${roomId}" not found` });
             return;
           }
-          rooms.join(room.id, userId, ws);
+          rooms.join(room.id, userId, msg.userName.trim(), ws);
           currentRoomId = room.id;
-          send(ws, { type: 'room:joined', roomId: room.id, members: room.members.size });
+          send(ws, { type: 'room:joined', roomId: room.id, members: room.members.size, hostId: room.hostId, hostName: room.names.get(room.hostId) });
+          if (room.playback?.src) send(ws, { type: 'sync:state', state: room.playback });
           broadcast(room, { type: 'room:members', count: room.members.size }, ws);
-          broadcastSystem(room, `User ${userId?.slice(0, 6)} joined`, ws);
+          broadcastSystem(room, `${msg.userName.trim()} joined`, ws);
           console.log(`[WS] ${userId} joined room ${room.id}`);
           break;
         }
@@ -54,20 +63,49 @@ export function initSocket(server) {
         case 'sync:play':
         case 'sync:pause': {
           const room = rooms.get(currentRoomId);
-          if (room) broadcast(room, { type, userId }, ws);
+          if (!room) break;
+          if (room.hostId !== userId) {
+            send(ws, { type: 'error', message: 'Only host can control playback' });
+            break;
+          }
+          room.playback.isPlaying = type === 'sync:play';
+          broadcast(room, { type, userId }, ws);
           break;
         }
 
         case 'sync:seek': {
           const room = rooms.get(currentRoomId);
-          if (room) broadcast(room, { type: 'sync:seek', time: msg.time, userId }, ws);
+          if (!room) break;
+          if (room.hostId !== userId) {
+            send(ws, { type: 'error', message: 'Only host can control playback' });
+            break;
+          }
+          room.playback.time = Number(msg.time) || 0;
+          broadcast(room, { type: 'sync:seek', time: msg.time, userId }, ws);
+          break;
+        }
+
+        case 'sync:state': {
+          const room = rooms.get(currentRoomId);
+          if (!room) break;
+          if (room.hostId !== userId) {
+            send(ws, { type: 'error', message: 'Only host can control playback' });
+            break;
+          }
+          room.playback = {
+            src: msg.state?.src || null,
+            title: msg.state?.title || '',
+            time: Number(msg.state?.time) || 0,
+            isPlaying: !!msg.state?.isPlaying,
+          };
+          broadcast(room, { type: 'sync:state', state: room.playback }, ws);
           break;
         }
 
         case 'chat:message': {
           const room = rooms.get(currentRoomId);
           if (room && msg.text?.trim()) {
-            const payload = { type: 'chat:message', user: userId, text: msg.text.slice(0, 300) };
+            const payload = { type: 'chat:message', user: userId, name: room.names.get(userId) || msg.userName || 'Guest', text: msg.text.slice(0, 300) };
             broadcast(room, payload, null); // include sender too
           }
           break;
@@ -109,6 +147,7 @@ function handleLeave(ws, roomId, userId) {
   const room = rooms.get(roomId);
   if (!room) return;
 
+  const leavingName = room.names.get(userId) || 'A user';
   rooms.leave(roomId, userId);
 
   if (room.members.size === 0) {
@@ -116,7 +155,8 @@ function handleLeave(ws, roomId, userId) {
     console.log(`[WS] Room ${roomId} deleted (empty)`);
   } else {
     broadcast(room, { type: 'room:members', count: room.members.size }, null);
-    broadcastSystem(room, `User ${userId?.slice(0, 6)} left`, null);
+    broadcast(room, { type: 'room:host', hostId: room.hostId, hostName: room.names.get(room.hostId) || 'Host' }, null);
+    broadcastSystem(room, `${leavingName} left`, null);
   }
 
   send(ws, { type: 'room:left', roomId });
