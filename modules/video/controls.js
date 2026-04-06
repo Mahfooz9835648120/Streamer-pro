@@ -53,23 +53,55 @@ export function initControls(video) {
   // ——— Tap overlay (tap to play/pause, double-tap to seek) ———
   const tapOverlay = document.getElementById('tap-overlay');
   let lastTap = 0;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchMoved = false;
+  tapOverlay?.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchMoved = false;
+  }, { passive: true });
+  tapOverlay?.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1) return;
+    const dx = Math.abs(e.touches[0].clientX - touchStartX);
+    const dy = Math.abs(e.touches[0].clientY - touchStartY);
+    if (dx > 8 || dy > 8) touchMoved = true;
+  }, { passive: true });
   tapOverlay?.addEventListener('click', (e) => {
+    if (!('ontouchstart' in window)) {
+      showControls();
+      return;
+    }
+    if (touchMoved) return;
     const now = Date.now();
     if (now - lastTap < 300) {
       // Double-tap: seek based on side
       const side = e.clientX < window.innerWidth / 2 ? 'left' : 'right';
       video.currentTime += side === 'left' ? -10 : 10;
-      flashIcon(container, side === 'left' ? '⏪' : '⏩');
+      flashIcon(container, side === 'left' ? '-10s' : '+10s');
     } else {
-      togglePlay(video, container);
+      // Single tap should only reveal controls; avoid accidental play/pause toggles.
+      showControls();
     }
     lastTap = now;
-    showControls();
   });
 
   // ——— Skip buttons ———
-  skipBackBtn?.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime -= 10; flashIcon(container, '⏪'); });
-  skipFwdBtn?.addEventListener('click',  (e) => { e.stopPropagation(); video.currentTime += 10; flashIcon(container, '⏩'); });
+  skipBackBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!canControlPlayback()) return;
+    video.currentTime -= 10;
+    EventBus.emit(EVENTS.VIDEO_SEEK, { time: video.currentTime });
+    flashIcon(container, '-10s');
+  });
+  skipFwdBtn?.addEventListener('click',  (e) => {
+    e.stopPropagation();
+    if (!canControlPlayback()) return;
+    video.currentTime += 10;
+    EventBus.emit(EVENTS.VIDEO_SEEK, { time: video.currentTime });
+    flashIcon(container, '+10s');
+  });
 
   // ——— Seek bar ———
   function updateSeekBar(progress, buffered) {
@@ -91,6 +123,7 @@ export function initControls(video) {
 
   // Seek bar click/drag
   function seekTo(e) {
+    if (!canControlPlayback()) return;
     const rect = seekBar.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
@@ -98,6 +131,7 @@ export function initControls(video) {
     updateSeekBar(pct, getState('video.buffered') || 0);
     // Emit for teleparty sync
     EventBus.emit(EVENTS.PARTY_SEEK, { time: video.currentTime });
+    EventBus.emit(EVENTS.VIDEO_SEEK, { time: video.currentTime });
   }
 
   seekBar?.addEventListener('mousedown', (e) => {
@@ -119,12 +153,16 @@ export function initControls(video) {
   // ——— Fullscreen ———
   fullscreenBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!document.fullscreenElement) {
-      container.requestFullscreen?.() || container.webkitRequestFullscreen?.();
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const req = container.requestFullscreen?.() || container.webkitRequestFullscreen?.();
+      Promise.resolve(req).then(() => tryLockLandscape()).catch(() => {});
     } else {
-      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      const exit = document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      Promise.resolve(exit).finally(() => tryUnlockOrientation());
     }
   });
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
   // ——— Play/pause icon sync ———
   EventBus.on(EVENTS.VIDEO_PLAY,  () => { if (playIcon) playIcon.style.display = 'none'; if (pauseIcon) pauseIcon.style.display = ''; });
@@ -142,8 +180,20 @@ export function initControls(video) {
     switch (e.key) {
       case ' ':
       case 'k': e.preventDefault(); togglePlay(video, container); break;
-      case 'ArrowLeft':  e.preventDefault(); video.currentTime -= 10; flashIcon(container, '⏪'); break;
-      case 'ArrowRight': e.preventDefault(); video.currentTime += 10; flashIcon(container, '⏩'); break;
+      case 'ArrowLeft':
+        if (!canControlPlayback()) return;
+        e.preventDefault();
+        video.currentTime -= 10;
+        EventBus.emit(EVENTS.VIDEO_SEEK, { time: video.currentTime });
+        flashIcon(container, '-10s');
+        break;
+      case 'ArrowRight':
+        if (!canControlPlayback()) return;
+        e.preventDefault();
+        video.currentTime += 10;
+        EventBus.emit(EVENTS.VIDEO_SEEK, { time: video.currentTime });
+        flashIcon(container, '+10s');
+        break;
       case 'm': video.muted = !video.muted; break;
       case 'f': fullscreenBtn?.click(); break;
     }
@@ -151,13 +201,46 @@ export function initControls(video) {
 }
 
 function togglePlay(video, container) {
+  if (!canControlPlayback()) return;
   if (video.paused) {
     video.play().catch(() => {});
     EventBus.emit(EVENTS.PARTY_PLAY, {});
-    flashIcon(container, '▶');
   } else {
     video.pause();
     EventBus.emit(EVENTS.PARTY_PAUSE, {});
-    flashIcon(container, '⏸');
+  }
+}
+
+function canControlPlayback() {
+  const inRoom = !!getState('party.roomId');
+  const isHost = !!getState('party.isHost');
+  if (inRoom && !isHost) {
+    EventBus.emit(EVENTS.TOAST, { msg: 'Only the host can control playback in this room.' });
+    return false;
+  }
+  return true;
+}
+
+function onFullscreenChange() {
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    tryLockLandscape();
+  } else {
+    tryUnlockOrientation();
+  }
+}
+
+async function tryLockLandscape() {
+  try {
+    await screen.orientation?.lock?.('landscape');
+  } catch {
+    // silently ignore unsupported/broken lock APIs.
+  }
+}
+
+function tryUnlockOrientation() {
+  try {
+    screen.orientation?.unlock?.();
+  } catch {
+    // ignore
   }
 }
