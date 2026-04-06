@@ -63,6 +63,10 @@ export function initPanels() {
   document.getElementById('history-btn')?.addEventListener('click', () => openPanel('history-panel'));
   document.getElementById('close-history-btn')?.addEventListener('click', closeAll);
 
+  // Admin panel button
+  document.getElementById('admin-btn')?.addEventListener('click', () => openPanel('admin-panel'));
+  document.getElementById('close-admin-btn')?.addEventListener('click', closeAll);
+
   // Overlay click closes
   overlay.addEventListener('click', closeAll);
 

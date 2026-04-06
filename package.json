@@ -8,11 +8,13 @@
     "dev:frontend": "vite",
     "dev:backend": "node server/server.js",
     "build": "vite build",
+    "start": "NODE_ENV=production node server/server.js",
     "preview": "vite preview"
   },
   "dependencies": {
     "concurrently": "^9.2.1",
     "cors": "^2.8.6",
+    "dashjs": "^4.7.4",
     "express": "^4.22.1",
     "hls.js": "^1.6.15",
     "ws": "^8.20.0"
