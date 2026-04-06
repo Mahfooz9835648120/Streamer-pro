@@ -1,10 +1,13 @@
 /**
  * Audio Visualizer — Canvas-based frequency bars using Web Audio API analyser.
+ * Fixed: DPR scaling is baked into canvas dimensions, not ctx transforms,
+ * so setTransform() resets don't break the scale each frame.
  */
 import { getState } from '../utils/state.js';
 
 let canvas, ctx, analyser;
 let animId = null;
+let dpr = 1;
 
 export function initVisualizer(analyserNode) {
   canvas  = document.getElementById('visualizer');
@@ -12,29 +15,32 @@ export function initVisualizer(analyserNode) {
   if (!canvas || !analyser) return;
 
   ctx = canvas.getContext('2d');
+  dpr = window.devicePixelRatio || 1;
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas, { passive: true });
 
-  // Start drawing
   if (animId) cancelAnimationFrame(animId);
   draw();
 }
 
 function resizeCanvas() {
   if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width  = canvas.offsetWidth  * dpr;
-  canvas.height = canvas.offsetHeight * dpr;
-  ctx?.scale(dpr, dpr);
+  dpr = window.devicePixelRatio || 1;
+  // Physical pixels = CSS pixels × dpr
+  canvas.width  = Math.round(canvas.offsetWidth  * dpr);
+  canvas.height = Math.round(canvas.offsetHeight * dpr);
+  // No ctx.scale() here — draw() uses canvas.width/height directly
 }
 
 function draw() {
   animId = requestAnimationFrame(draw);
-  if (!ctx || !analyser) return;
+  if (!ctx || !analyser || !canvas) return;
 
-  const W = canvas.offsetWidth;
-  const H = canvas.offsetHeight;
-  const bufLen = analyser.frequencyBinCount;
+  // Work in physical pixel space (canvas.width × canvas.height)
+  const W = canvas.width;
+  const H = canvas.height;
+
+  const bufLen  = analyser.frequencyBinCount;
   const dataArr = new Uint8Array(bufLen);
   analyser.getByteFrequencyData(dataArr);
 
@@ -42,40 +48,38 @@ function draw() {
 
   const isPlaying = getState('music.isPlaying');
   const barCount  = getState('perf.isLowEnd') ? 24 : 48;
-  const step      = Math.floor(bufLen / barCount);
-  const barW      = (W / barCount) - 1;
+  const step      = Math.max(1, Math.floor(bufLen / barCount));
+  const gap       = Math.round(dpr);
+  const barW      = Math.floor((W - gap * (barCount - 1)) / barCount);
 
   for (let i = 0; i < barCount; i++) {
     const value = dataArr[i * step] / 255;
-    const barH  = value * H * 0.9;
-
-    // Gradient from white to dim gray
-    const alpha = isPlaying ? (0.3 + value * 0.7) : 0.08;
-    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-
-    const x = i * (barW + 1);
+    const barH  = Math.max(2, value * H * 0.88);
+    const alpha = isPlaying ? (0.3 + value * 0.7) : 0.1;
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    const x = i * (barW + gap);
     const y = H - barH;
-
-    // Rounded top bars
+    // Rounded tops
     ctx.beginPath();
-    ctx.roundRect(x, y, barW, barH, [2, 2, 0, 0]);
+    const r = Math.min(barW / 2, 3 * dpr);
+    ctx.roundRect(x, y, barW, barH, [r, r, 0, 0]);
     ctx.fill();
   }
 
-  // Reflection
-  ctx.globalAlpha = 0.12;
+  // Reflection (save/restore so transforms don't accumulate)
+  ctx.save();
   ctx.scale(1, -1);
   ctx.translate(0, -H);
+  ctx.globalAlpha = 0.12;
   for (let i = 0; i < barCount; i++) {
     const value = dataArr[i * step] / 255;
-    const barH  = value * H * 0.3;
-    const x = i * (barW + 1);
+    const barH  = Math.max(1, value * H * 0.28);
+    const x = i * (barW + gap);
     const y = H - barH;
     ctx.fillStyle = `rgba(255,255,255,${0.2 + value * 0.4})`;
     ctx.fillRect(x, y, barW, barH);
   }
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 export function stopVisualizer() {

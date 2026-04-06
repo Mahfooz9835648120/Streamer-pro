@@ -35,6 +35,76 @@
         <div class="section-header"><h2 class="section-title">Library</h2><div class="history-btn-wrap"><button class="ghost-btn" id="history-btn">History</button></div></div>
         <div id="video-grid" class="card-grid"></div>
       </section>
+
+      <!-- ========== MUSIC MODE ========== -->
+      <section id="music-mode" class="mode-section">
+        <!-- Album art + meta -->
+        <div class="music-hero">
+          <div class="album-art-wrap">
+            <div id="album-ring" class="album-ring"></div>
+            <div id="album-art" class="album-art"><div class="album-placeholder">♪</div></div>
+          </div>
+          <div class="music-meta">
+            <p id="track-title" class="track-title">Select a track</p>
+            <p id="track-artist" class="track-artist">—</p>
+            <span id="music-live-badge" class="badge music-live-badge" style="display:none">● LIVE</span>
+          </div>
+        </div>
+
+        <!-- Visualizer -->
+        <div class="visualizer-wrap">
+          <canvas id="visualizer" class="visualizer-canvas"></canvas>
+        </div>
+
+        <!-- Seek bar -->
+        <div class="seek-container music-seek-wrap" id="music-seek-container">
+          <div id="music-seek-bar" class="seek-bar">
+            <div id="music-seek-progress" class="seek-progress" style="width:0%"></div>
+            <div id="music-seek-thumb" class="seek-thumb" style="left:0%"></div>
+          </div>
+          <div class="music-time-row">
+            <span id="music-current-time" class="time-display">0:00</span>
+            <span id="music-duration" class="time-display">--:--</span>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="music-controls">
+          <button id="shuffle-btn" class="ctrl-btn small" title="Shuffle" aria-label="Shuffle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16,3 21,3 21,8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21,16 21,21 16,21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+          </button>
+          <button id="music-prev-btn" class="ctrl-btn large" aria-label="Previous">
+            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19,20 9,12 19,4"/><rect x="5" y="4" width="3" height="16"/></svg>
+          </button>
+          <button id="music-play-btn" class="ctrl-btn play-pause" aria-label="Play/Pause">
+            <svg id="music-play-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+            <svg id="music-pause-icon" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          </button>
+          <button id="music-next-btn" class="ctrl-btn large" aria-label="Next">
+            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,4 15,12 5,20"/><rect x="16" y="4" width="3" height="16"/></svg>
+          </button>
+          <button id="repeat-btn" class="ctrl-btn small" title="Repeat" aria-label="Repeat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17,1 21,5 17,9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7,23 3,19 7,15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          </button>
+        </div>
+
+        <!-- Playlist -->
+        <div class="section-header" style="margin-top:24px">
+          <h2 class="section-title">Playlist</h2>
+        </div>
+        <div id="playlist-container" class="playlist-list"></div>
+
+        <!-- Add custom stream -->
+        <div class="music-add-stream-wrap">
+          <h3 class="music-add-title">Add Audio Stream</h3>
+          <div class="music-add-row">
+            <input type="url" id="music-stream-url" class="music-stream-input" placeholder="Paste .mp3 / .m3u8 / stream URL..." />
+            <input type="text" id="music-stream-title" class="music-stream-input" placeholder="Title (optional)" />
+            <button id="music-add-btn" class="primary-btn">Add</button>
+          </div>
+          <p class="music-add-hint">Supports MP3, AAC, M3U8, OGG, FLAC streams</p>
+        </div>
+      </section>
     </main>
     <div id="teleparty-panel" class="side-panel" aria-hidden="true"><div class="panel-header"><h3>Watch Together</h3><button class="icon-btn" id="close-party-btn" aria-label="Close panel">✕</button></div><div class="panel-body"><div id="party-create-join"><div class="form-group"><label>Create a room</label><button class="primary-btn full-width" id="create-room-btn">Create Room</button></div><div class="divider"><span>or</span></div><div class="form-group"><label>Join a room</label><input type="text" id="room-id-input" placeholder="Enter room ID..." /><button class="primary-btn full-width" id="join-room-btn">Join Room</button></div></div><div id="party-active" style="display:none"><div class="room-info"><span class="label">Room ID:</span><strong id="room-id-display"></strong><button class="ghost-btn small" id="copy-room-btn">Copy</button></div><div class="party-members"><span class="label">Members: </span><span id="party-count">1</span></div><div id="chat-messages" class="chat-messages"></div><div class="chat-input-row"><input type="text" id="chat-input" placeholder="Say something..." /><button class="primary-btn" id="send-chat-btn">Send</button></div><button class="ghost-btn full-width" id="leave-room-btn" style="margin-top:12px">Leave Room</button></div></div></div><div id="panel-overlay" class="panel-overlay" aria-hidden="true"></div><div id="history-panel" class="side-panel" aria-hidden="true"><div class="panel-header"><h3>Watch History</h3><button class="icon-btn" id="close-history-btn" aria-label="Close">✕</button></div><div class="panel-body"><div id="history-list" class="history-list"></div><button class="ghost-btn full-width" id="clear-history-btn" style="margin-top:16px">Clear History</button></div></div><div id="toast-container" aria-live="polite"></div><nav id="bottom-nav" aria-label="Main navigation"><button class="nav-btn active" data-mode="video" aria-label="Video mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23,7 16,12 23,17"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg><span>Video</span></button><button class="nav-btn" data-mode="music" aria-label="Music mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Music</span></button></nav>
   </div>

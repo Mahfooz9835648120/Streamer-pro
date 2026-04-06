@@ -13,18 +13,28 @@ let analyser = null;
 let sourceNode = null;
 let freqTimer = null;
 
+// Runtime playlist (may grow via "Add Stream")
+const runtimePlaylist = [...playlist];
+
 export function initMusicPlayer() {
   if (!audio) return;
 
-  audio.addEventListener('play', () => { setState('music.isPlaying', true); EventBus.emit(EVENTS.MUSIC_PLAY, {}); updatePlayUI(true); });
+  audio.addEventListener('play',  () => { setState('music.isPlaying', true);  EventBus.emit(EVENTS.MUSIC_PLAY,  {}); updatePlayUI(true);  });
   audio.addEventListener('pause', () => { setState('music.isPlaying', false); EventBus.emit(EVENTS.MUSIC_PAUSE, {}); updatePlayUI(false); });
   audio.addEventListener('ended', onTrackEnded);
   audio.addEventListener('timeupdate', onTimeUpdate);
   audio.addEventListener('loadedmetadata', () => {
-    setState('music.duration', audio.duration);
-    const durEl = document.getElementById('music-duration');
-    if (durEl) durEl.textContent = formatTime(audio.duration);
+    const track = runtimePlaylist[getState('music.currentIndex') || 0];
+    if (!track?.live) {
+      setState('music.duration', audio.duration);
+      const durEl = document.getElementById('music-duration');
+      if (durEl) durEl.textContent = formatTime(audio.duration);
+    }
     updateAlbumRing(true);
+  });
+  audio.addEventListener('error', () => {
+    const track = runtimePlaylist[getState('music.currentIndex') || 0];
+    if (track) showToast(`Could not load: ${track.title}`);
   });
 
   document.getElementById('music-play-btn')?.addEventListener('click', togglePlay);
@@ -33,16 +43,23 @@ export function initMusicPlayer() {
   document.getElementById('shuffle-btn')?.addEventListener('click', toggleShuffle);
   document.getElementById('repeat-btn')?.addEventListener('click', toggleRepeat);
 
+  // Seek
   const seekBar = document.getElementById('music-seek-bar');
   let isSeeking = false;
   seekBar?.addEventListener('mousedown', (e) => {
+    const track = runtimePlaylist[getState('music.currentIndex') || 0];
+    if (track?.live) return;
     isSeeking = true; seekTo(e);
     const onMove = (ev) => { if (isSeeking) seekTo(ev); };
     const onUp = () => { isSeeking = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
-  seekBar?.addEventListener('touchstart', (e) => { isSeeking = true; seekTo(e); }, { passive: true });
+  seekBar?.addEventListener('touchstart', (e) => {
+    const track = runtimePlaylist[getState('music.currentIndex') || 0];
+    if (track?.live) return;
+    isSeeking = true; seekTo(e);
+  }, { passive: true });
   seekBar?.addEventListener('touchmove', (e) => { if (isSeeking) seekTo(e); }, { passive: true });
   seekBar?.addEventListener('touchend', () => { isSeeking = false; });
 
@@ -54,22 +71,62 @@ export function initMusicPlayer() {
     audio.currentTime = pct * (audio.duration || 0);
   }
 
+  // Add custom stream
+  document.getElementById('music-add-btn')?.addEventListener('click', addCustomStream);
+  document.getElementById('music-stream-url')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addCustomStream();
+  });
+
   renderPlaylist();
-  if (playlist.length) loadTrack(0);
+  if (runtimePlaylist.length) loadTrack(0);
+}
+
+function addCustomStream() {
+  const urlEl   = document.getElementById('music-stream-url');
+  const titleEl = document.getElementById('music-stream-title');
+  const url = urlEl?.value.trim();
+  if (!url) return;
+
+  const isLive = url.includes('.m3u8') || !url.match(/\.(mp3|ogg|flac|wav|aac|opus)(\?|$)/i);
+  const title  = titleEl?.value.trim() || guessTitle(url);
+  runtimePlaylist.push({
+    title,
+    artist: 'Custom Stream',
+    src: url,
+    cover: null,
+    duration: isLive ? 'LIVE' : '--:--',
+    live: isLive,
+  });
+
+  if (urlEl)   urlEl.value   = '';
+  if (titleEl) titleEl.value = '';
+  renderPlaylist();
+  showToast(`Added: ${title}`);
+}
+
+function guessTitle(url) {
+  try {
+    const parts = new URL(url).pathname.split('/');
+    const last = parts[parts.length - 1].replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+    return last || 'Custom Stream';
+  } catch { return 'Custom Stream'; }
 }
 
 function onTimeUpdate() {
-  const ct = audio.currentTime;
+  const track = runtimePlaylist[getState('music.currentIndex') || 0];
+  if (track?.live) return;
+
+  const ct  = audio.currentTime;
   const dur = audio.duration || 0;
   setState('music.currentTime', ct);
 
-  const prog = dur > 0 ? ct / dur : 0;
+  const prog   = dur > 0 ? ct / dur : 0;
   const progEl = document.getElementById('music-seek-progress');
   const thumbEl = document.getElementById('music-seek-thumb');
-  const ctEl = document.getElementById('music-current-time');
-  if (progEl) progEl.style.width = `${prog * 100}%`;
+  const ctEl   = document.getElementById('music-current-time');
+  if (progEl)  progEl.style.width = `${prog * 100}%`;
   if (thumbEl) thumbEl.style.left = `${prog * 100}%`;
-  if (ctEl) ctEl.textContent = formatTime(ct);
+  if (ctEl)    ctEl.textContent = formatTime(ct);
 }
 
 function onTrackEnded() {
@@ -83,30 +140,40 @@ function onTrackEnded() {
 }
 
 export function loadTrack(index) {
-  if (index < 0 || index >= playlist.length) return;
+  if (index < 0 || index >= runtimePlaylist.length) return;
   setState('music.currentIndex', index);
 
-  const track = playlist[index];
-  audio.src = track.src;
+  const track = runtimePlaylist[index];
+  audio.src   = track.src;
 
-  const trackTitleEl = document.getElementById('track-title');
+  const trackTitleEl  = document.getElementById('track-title');
   const trackArtistEl = document.getElementById('track-artist');
-  if (trackTitleEl) trackTitleEl.textContent = track.title;
+  const liveBadgeEl   = document.getElementById('music-live-badge');
+  const seekContainer = document.getElementById('music-seek-container');
+
+  if (trackTitleEl)  trackTitleEl.textContent  = track.title;
   if (trackArtistEl) trackArtistEl.textContent = track.artist;
+  if (liveBadgeEl)   liveBadgeEl.style.display  = track.live ? 'inline-block' : 'none';
+
+  // Hide seek bar for live streams
+  if (seekContainer) seekContainer.style.opacity = track.live ? '0.3' : '1';
 
   const artEl = document.getElementById('album-art');
   if (artEl) {
-    artEl.innerHTML = track.cover ? `<img src="${track.cover}" alt="${track.title}" />` : `<div class="album-placeholder">♪</div>`;
+    artEl.innerHTML = track.cover
+      ? `<img src="${track.cover}" alt="${track.title}" />`
+      : `<div class="album-placeholder">♪</div>`;
   }
 
-  const seekProgress = document.getElementById('music-seek-progress');
-  const seekThumb = document.getElementById('music-seek-thumb');
+  // Reset seek UI
+  const seekProgress  = document.getElementById('music-seek-progress');
+  const seekThumb     = document.getElementById('music-seek-thumb');
   const currentTimeEl = document.getElementById('music-current-time');
-  const durationEl = document.getElementById('music-duration');
-  if (seekProgress) seekProgress.style.width = '0%';
-  if (seekThumb) seekThumb.style.left = '0%';
-  if (currentTimeEl) currentTimeEl.textContent = '0:00';
-  if (durationEl) durationEl.textContent = '--:--';
+  const durationEl    = document.getElementById('music-duration');
+  if (seekProgress)  seekProgress.style.width = '0%';
+  if (seekThumb)     seekThumb.style.left      = '0%';
+  if (currentTimeEl) currentTimeEl.textContent  = track.live ? '–' : '0:00';
+  if (durationEl)    durationEl.textContent     = track.live ? 'LIVE' : '--:--';
 
   EventBus.emit(EVENTS.MUSIC_TRACK, track);
   renderPlaylist();
@@ -117,8 +184,8 @@ export function loadTrack(index) {
 function initAudioContext() {
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 128;
+    analyser  = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
     sourceNode = audioCtx.createMediaElementSource(audio);
     sourceNode.connect(analyser);
     analyser.connect(audioCtx.destination);
@@ -147,9 +214,9 @@ function togglePlay() {
 
 export function nextTrack() {
   const state = getState('music');
-  let next = state.currentIndex + 1;
-  if (state.shuffle) next = Math.floor(Math.random() * playlist.length);
-  if (next >= playlist.length) {
+  let next = (state.currentIndex || 0) + 1;
+  if (state.shuffle) next = Math.floor(Math.random() * runtimePlaylist.length);
+  if (next >= runtimePlaylist.length) {
     if (state.repeat === 'all') next = 0;
     else return;
   }
@@ -160,8 +227,8 @@ export function nextTrack() {
 export function prevTrack() {
   if (audio.currentTime > 3) { audio.currentTime = 0; return; }
   const state = getState('music');
-  let prev = state.currentIndex - 1;
-  if (prev < 0) prev = playlist.length - 1;
+  let prev = (state.currentIndex || 0) - 1;
+  if (prev < 0) prev = runtimePlaylist.length - 1;
   loadTrack(prev);
   if (getState('music.isPlaying')) audio.play().catch(() => {});
 }
@@ -173,7 +240,7 @@ function toggleShuffle() {
 }
 
 function toggleRepeat() {
-  const cur = getState('music.repeat');
+  const cur  = getState('music.repeat');
   const next = cur === false ? 'all' : cur === 'all' ? 'one' : false;
   setState('music.repeat', next);
   const btn = document.getElementById('repeat-btn');
@@ -182,10 +249,10 @@ function toggleRepeat() {
 }
 
 function updatePlayUI(playing) {
-  const playIcon = document.getElementById('music-play-icon');
+  const playIcon  = document.getElementById('music-play-icon');
   const pauseIcon = document.getElementById('music-pause-icon');
-  const artEl = document.getElementById('album-art');
-  if (playIcon) playIcon.style.display = playing ? 'none' : '';
+  const artEl     = document.getElementById('album-art');
+  if (playIcon)  playIcon.style.display  = playing ? 'none' : '';
   if (pauseIcon) pauseIcon.style.display = playing ? '' : 'none';
   artEl?.classList.toggle('playing', playing);
 }
@@ -195,11 +262,11 @@ function updateAlbumRing(active) {
 }
 
 function renderPlaylist() {
-  const container = document.getElementById('playlist-container');
+  const container    = document.getElementById('playlist-container');
   if (!container) return;
-  const currentIndex = getState('music.currentIndex');
+  const currentIndex = getState('music.currentIndex') || 0;
 
-  container.innerHTML = playlist.map((track, i) => `
+  container.innerHTML = runtimePlaylist.map((track, i) => `
     <div class="playlist-item${i === currentIndex ? ' active' : ''}" data-index="${i}">
       <span class="playlist-num">${i === currentIndex ? '▶' : i + 1}</span>
       <div class="playlist-art">${track.cover ? `<img src="${track.cover}" alt="" />` : '♪'}</div>
@@ -207,7 +274,7 @@ function renderPlaylist() {
         <p class="playlist-title">${track.title}</p>
         <p class="playlist-artist">${track.artist}</p>
       </div>
-      <span class="playlist-duration">${track.duration || '--:--'}</span>
+      <span class="playlist-duration${track.live ? ' live' : ''}">${track.duration || '--:--'}</span>
     </div>
   `).join('');
 
@@ -220,4 +287,8 @@ function renderPlaylist() {
       audio.play().catch(() => {});
     });
   });
+}
+
+function showToast(msg) {
+  EventBus.emit(EVENTS.TOAST, { msg, duration: 2500 });
 }
