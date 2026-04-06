@@ -33,8 +33,8 @@ export function initMusicPlayer() {
   });
 
   document.getElementById('music-play-btn')?.addEventListener('click', togglePlay);
-  document.getElementById('music-prev-btn')?.addEventListener('click', prevTrack);
-  document.getElementById('music-next-btn')?.addEventListener('click', nextTrack);
+  document.getElementById('music-prev-btn')?.addEventListener('click', () => { if (canControlMusic()) prevTrack(); });
+  document.getElementById('music-next-btn')?.addEventListener('click', () => { if (canControlMusic()) nextTrack(); });
   document.getElementById('shuffle-btn')?.addEventListener('click', toggleShuffle);
   document.getElementById('repeat-btn')?.addEventListener('click', toggleRepeat);
 
@@ -52,6 +52,7 @@ export function initMusicPlayer() {
   seekBar?.addEventListener('touchend', () => { isSeeking = false; });
 
   function seekTo(e) {
+    if (!canControlMusic()) return;
     if (!seekBar) return;
     const rect = seekBar.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -96,11 +97,19 @@ function injectMusicUrlForm() {
       <input type="url" id="music-url-input" placeholder="https://example.com/stream.mp3" />
       <button class="primary-btn" id="music-url-add-btn" type="button">Add</button>
     </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <input type="file" id="music-file-input" accept="audio/*" />
+      <button class="ghost-btn" id="music-file-add-btn" type="button">Upload Song</button>
+    </div>
   `;
   musicMode.prepend(form);
 
   const input = form.querySelector('#music-url-input');
   const addBtn = form.querySelector('#music-url-add-btn');
+  const fileInput = form.querySelector('#music-file-input');
+  const fileBtn = form.querySelector('#music-file-add-btn');
+  addBtn?.addEventListener('click', () => {
+    if (!canControlMusic()) return;
   addBtn?.addEventListener('click', () => {
     const src = input?.value?.trim();
     if (!src) {
@@ -122,6 +131,29 @@ function injectMusicUrlForm() {
     audio.play().catch(() => {});
     EventBus.emit(EVENTS.TOAST, { msg: '✓ Music stream added' });
     if (input) input.value = '';
+  });
+
+  fileBtn?.addEventListener('click', () => {
+    if (!canControlMusic()) return;
+    const file = fileInput?.files?.[0];
+    if (!file) {
+      EventBus.emit(EVENTS.TOAST, { msg: 'Choose an audio file first.' });
+      return;
+    }
+    const localUrl = URL.createObjectURL(file);
+    playlist.unshift({
+      title: file.name.replace(/\.[^.]+$/, '') || 'Uploaded Song',
+      artist: 'User Upload',
+      src: localUrl,
+      cover: null,
+      duration: 'Local',
+    });
+    renderPlaylist();
+    loadTrack(0);
+    setState('music.isPlaying', true);
+    audioCtx?.resume();
+    audio.play().catch(() => {});
+    EventBus.emit(EVENTS.TOAST, { msg: '✓ Song uploaded to playlist' });
   });
 }
 
@@ -204,12 +236,23 @@ function initAudioContext() {
 }
 
 function togglePlay() {
+  if (!canControlMusic()) return;
   if (audio.paused) {
     audioCtx?.resume();
     audio.play().catch(() => {});
   } else {
     audio.pause();
   }
+}
+
+function canControlMusic() {
+  const inRoom = !!getState('party.roomId');
+  const isHost = !!getState('party.isHost');
+  if (inRoom && !isHost) {
+    EventBus.emit(EVENTS.TOAST, { msg: 'Only the host can control music in this room.' });
+    return false;
+  }
+  return true;
 }
 
 export function nextTrack() {
@@ -280,6 +323,7 @@ function renderPlaylist() {
 
   container.querySelectorAll('.playlist-item').forEach(el => {
     el.addEventListener('click', () => {
+      if (!canControlMusic()) return;
       const idx = parseInt(el.dataset.index);
       loadTrack(idx);
       setState('music.isPlaying', true);

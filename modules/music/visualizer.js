@@ -83,10 +83,14 @@ function draw() {
     const x = i * (barW + 1);
     const y = H - barH;
 
-    // Rounded top bars
-    ctx.beginPath();
-    ctx.roundRect(x, y, barW, barH, [2, 2, 0, 0]);
-    ctx.fill();
+    // Rounded top bars (fallback for browsers without roundRect)
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, barH, [2, 2, 0, 0]);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x, y, barW, barH);
+    }
   }
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
