@@ -15,6 +15,8 @@ let freqTimer = null;
 
 export function initMusicPlayer() {
   if (!audio) return;
+  injectSupportedFormats();
+  injectMusicUrlForm();
 
   audio.addEventListener('play', () => { setState('music.isPlaying', true); EventBus.emit(EVENTS.MUSIC_PLAY, {}); updatePlayUI(true); });
   audio.addEventListener('pause', () => { setState('music.isPlaying', false); EventBus.emit(EVENTS.MUSIC_PAUSE, {}); updatePlayUI(false); });
@@ -26,10 +28,13 @@ export function initMusicPlayer() {
     if (durEl) durEl.textContent = formatTime(audio.duration);
     updateAlbumRing(true);
   });
+  audio.addEventListener('error', () => {
+    EventBus.emit(EVENTS.TOAST, { msg: '⚠ Unsupported audio stream. Try MP3, AAC, OGG, WAV, FLAC, HLS, or DASH.' });
+  });
 
   document.getElementById('music-play-btn')?.addEventListener('click', togglePlay);
-  document.getElementById('music-prev-btn')?.addEventListener('click', prevTrack);
-  document.getElementById('music-next-btn')?.addEventListener('click', nextTrack);
+  document.getElementById('music-prev-btn')?.addEventListener('click', () => { if (canControlMusic()) prevTrack(); });
+  document.getElementById('music-next-btn')?.addEventListener('click', () => { if (canControlMusic()) nextTrack(); });
   document.getElementById('shuffle-btn')?.addEventListener('click', toggleShuffle);
   document.getElementById('repeat-btn')?.addEventListener('click', toggleRepeat);
 
@@ -47,6 +52,7 @@ export function initMusicPlayer() {
   seekBar?.addEventListener('touchend', () => { isSeeking = false; });
 
   function seekTo(e) {
+    if (!canControlMusic()) return;
     if (!seekBar) return;
     const rect = seekBar.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -56,6 +62,98 @@ export function initMusicPlayer() {
 
   renderPlaylist();
   if (playlist.length) loadTrack(0);
+}
+
+function injectSupportedFormats() {
+  const musicMode = document.getElementById('music-mode');
+  if (!musicMode || document.getElementById('music-supported-formats')) return;
+  const support = document.createElement('div');
+  support.id = 'music-supported-formats';
+  support.className = 'stream-info';
+  support.style.marginBottom = '12px';
+  support.innerHTML = `
+    <span class="badge">MUSIC SUPPORT</span>
+    <span class="badge dim">MP3</span>
+    <span class="badge dim">AAC</span>
+    <span class="badge dim">OGG</span>
+    <span class="badge dim">WAV</span>
+    <span class="badge dim">FLAC</span>
+    <span class="badge dim">HLS</span>
+    <span class="badge dim">DASH</span>
+  `;
+  musicMode.prepend(support);
+}
+
+function injectMusicUrlForm() {
+  const musicMode = document.getElementById('music-mode');
+  if (!musicMode || document.getElementById('music-url-form')) return;
+  const form = document.createElement('div');
+  form.id = 'music-url-form';
+  form.className = 'form-group';
+  form.style.marginBottom = '12px';
+  form.innerHTML = `
+    <label>Add music stream URL</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="url" id="music-url-input" placeholder="https://example.com/stream.mp3" />
+      <button class="primary-btn" id="music-url-add-btn" type="button">Add</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <input type="file" id="music-file-input" accept="audio/*" />
+      <button class="ghost-btn" id="music-file-add-btn" type="button">Upload Song</button>
+    </div>
+  `;
+  musicMode.prepend(form);
+
+  const input = form.querySelector('#music-url-input');
+  const addBtn = form.querySelector('#music-url-add-btn');
+  const fileInput = form.querySelector('#music-file-input');
+  const fileBtn = form.querySelector('#music-file-add-btn');
+  addBtn?.addEventListener('click', () => {
+    if (!canControlMusic()) return;
+    const src = input?.value?.trim();
+    if (!src) {
+      EventBus.emit(EVENTS.TOAST, { msg: 'Enter a music stream URL first.' });
+      return;
+    }
+    const title = `Custom Stream ${playlist.length + 1}`;
+    playlist.unshift({
+      title,
+      artist: 'User Added',
+      src,
+      cover: null,
+      duration: 'Live',
+    });
+    renderPlaylist();
+    loadTrack(0);
+    setState('music.isPlaying', true);
+    audioCtx?.resume();
+    audio.play().catch(() => {});
+    EventBus.emit(EVENTS.TOAST, { msg: '✓ Music stream added' });
+    if (input) input.value = '';
+  });
+
+  fileBtn?.addEventListener('click', () => {
+    if (!canControlMusic()) return;
+    const file = fileInput?.files?.[0];
+    if (!file) {
+      EventBus.emit(EVENTS.TOAST, { msg: 'Choose an audio file first.' });
+      return;
+    }
+    const localUrl = URL.createObjectURL(file);
+    playlist.unshift({
+      title: file.name.replace(/\.[^.]+$/, '') || 'Uploaded Song',
+      artist: 'User Upload',
+      src: localUrl,
+      cover: null,
+      duration: 'Local',
+    });
+    renderPlaylist();
+    loadTrack(0);
+    setState('music.isPlaying', true);
+    audioCtx?.resume();
+    audio.play().catch(() => {});
+    EventBus.emit(EVENTS.TOAST, { msg: '✓ Song uploaded to playlist' });
+  });
 }
 
 function onTimeUpdate() {
@@ -137,12 +235,23 @@ function initAudioContext() {
 }
 
 function togglePlay() {
+  if (!canControlMusic()) return;
   if (audio.paused) {
     audioCtx?.resume();
     audio.play().catch(() => {});
   } else {
     audio.pause();
   }
+}
+
+function canControlMusic() {
+  const inRoom = !!getState('party.roomId');
+  const isHost = !!getState('party.isHost');
+  if (inRoom && !isHost) {
+    EventBus.emit(EVENTS.TOAST, { msg: 'Only the host can control music in this room.' });
+    return false;
+  }
+  return true;
 }
 
 export function nextTrack() {
@@ -213,6 +322,7 @@ function renderPlaylist() {
 
   container.querySelectorAll('.playlist-item').forEach(el => {
     el.addEventListener('click', () => {
+      if (!canControlMusic()) return;
       const idx = parseInt(el.dataset.index);
       loadTrack(idx);
       setState('music.isPlaying', true);
