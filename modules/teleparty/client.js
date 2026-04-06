@@ -67,12 +67,20 @@ function handleMessage(msg) {
       currentRoomId = msg.roomId;
       setState('party.roomId', msg.roomId);
       setState('party.members', msg.members);
+      setState('party.hostId', msg.hostId || null);
+      setState('party.isHost', msg.hostId === getState('party.userId'));
       EventBus.emit(EVENTS.PARTY_JOIN, msg);
       break;
 
     case 'room:members':
       setState('party.members', msg.count);
       EventBus.emit(EVENTS.PARTY_MEMBERS, msg.count);
+      break;
+
+    case 'room:host':
+      setState('party.hostId', msg.hostId || null);
+      setState('party.isHost', msg.hostId === getState('party.userId'));
+      EventBus.emit(EVENTS.PARTY_HOST, msg);
       break;
 
     case 'sync:play':
@@ -93,8 +101,12 @@ function handleMessage(msg) {
       setTimeout(() => setState('party.isSyncing', false), 200);
       break;
 
+    case 'sync:state':
+      EventBus.emit(EVENTS.PARTY_STATE, msg.state || null);
+      break;
+
     case 'chat:message':
-      EventBus.emit(EVENTS.PARTY_CHAT, { user: msg.user, text: msg.text, system: msg.system });
+      EventBus.emit(EVENTS.PARTY_CHAT, { user: msg.user, name: msg.name, text: msg.text, system: msg.system });
       break;
 
     case 'room:left':
@@ -112,21 +124,23 @@ function handleMessage(msg) {
 
 function send(msg) {
   if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ ...msg, userId }));
+    ws.send(JSON.stringify({ ...msg, userId, userName: getState('party.userName') || 'Guest' }));
   }
 }
 
-export async function createRoom() {
+export async function createRoom(userName) {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     try { await connect(); } catch { EventBus.emit(EVENTS.TOAST, { msg: '⚠ Cannot connect to server' }); return; }
   }
+  if (userName) setState('party.userName', userName);
   send({ type: 'room:create' });
 }
 
-export async function joinRoom(roomId) {
+export async function joinRoom(roomId, userName) {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     try { await connect(); } catch { EventBus.emit(EVENTS.TOAST, { msg: '⚠ Cannot connect to server' }); return; }
   }
+  if (userName) setState('party.userName', userName);
   currentRoomId = roomId;
   send({ type: 'room:join', roomId });
 }
@@ -143,3 +157,4 @@ export function syncPlay()       { if (!getState('party.isSyncing')) send({ type
 export function syncPause()      { if (!getState('party.isSyncing')) send({ type: 'sync:pause', roomId: currentRoomId }); }
 export function syncSeek(time)   { if (!getState('party.isSyncing')) send({ type: 'sync:seek', roomId: currentRoomId, time }); }
 export function sendChatMsg(text){ send({ type: 'chat:message', roomId: currentRoomId, text }); }
+export function syncState(state) { if (!getState('party.isSyncing')) send({ type: 'sync:state', roomId: currentRoomId, state }); }
