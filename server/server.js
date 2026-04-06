@@ -26,8 +26,8 @@ app.get('/api/admin/videos', (req, res) => {
 app.post('/api/admin/videos', (req, res) => {
   const { title, src, thumbnail, description, format, duration, tags } = req.body;
   if (!src) return res.status(400).json({ error: 'src is required' });
-  const video = { id: 'admin-' + Date.now(), title: title || 'Untitled', src, thumbnail: thumbnail || null, description: description || '', format: format || 'STREAM', duration: duration || '--', tags: tags || ['custom'] };
-  adminVideos.push(video);
+  const video = { id: 'admin-' + Date.now() + '-' + Math.random().toString(16).slice(2), title: title || 'Untitled', src, thumbnail: thumbnail || null, description: description || '', format: format || 'STREAM', duration: duration || '--', tags: tags || ['custom'] };
+  adminVideos.unshift(video);
   res.status(201).json(video);
 });
 

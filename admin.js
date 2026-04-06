@@ -1,4 +1,4 @@
-import { getFormatLabel, detectStreamFormat } from './modules/video/player.js';
+import { getFormatLabel } from './modules/video/player.js';
 import { addAdminVideo, getAdminVideos, removeAdminVideo } from './modules/video/admin.js';
 
 const ADMIN_ID = 'mahfoooozzzz';
@@ -27,10 +27,10 @@ function setAuthed() {
   showAdmin();
 }
 
-function showAdmin() {
+async function showAdmin() {
   if (loginView) loginView.style.display = 'none';
   if (adminView) adminView.style.display = 'block';
-  render();
+  await render();
 }
 
 function showLogin() {
@@ -38,8 +38,8 @@ function showLogin() {
   if (adminView) adminView.style.display = 'none';
 }
 
-function render() {
-  const videos = getAdminVideos();
+async function render() {
+  const videos = await getAdminVideos();
   if (!listEl) return;
   if (!videos.length) {
     listEl.innerHTML = '<div class="small">No streams saved yet.</div>';
@@ -56,9 +56,9 @@ function render() {
     </div>
   `).join('');
   listEl.querySelectorAll('.remove-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      removeAdminVideo(btn.dataset.id);
-      render();
+    btn.addEventListener('click', async () => {
+      await removeAdminVideo(btn.dataset.id);
+      await render();
     });
   });
 }
@@ -81,14 +81,13 @@ loginForm?.addEventListener('submit', (e) => {
 
 detectBtn?.addEventListener('click', updateFormat);
 urlInput?.addEventListener('input', updateFormat);
-form?.addEventListener('submit', (e) => {
+form?.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!isAuthed()) return;
   const url = urlInput.value.trim();
   if (!url) return;
   const title = titleInput.value.trim() || 'Untitled Stream';
   const video = {
-    id: 'admin-' + Date.now(),
     title,
     src: url,
     thumbnail: thumbInput.value.trim() || null,
@@ -97,10 +96,10 @@ form?.addEventListener('submit', (e) => {
     duration: '--',
     tags: ['custom'],
   };
-  addAdminVideo(video);
+  await addAdminVideo(video);
   form.reset();
   fmtSpan.textContent = '—';
-  render();
+  await render();
 });
 
 function escapeHtml(str) {
