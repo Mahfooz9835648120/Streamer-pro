@@ -47,7 +47,7 @@ svg { display: block; }
 .content-bar { margin-bottom: 16px; }
 .search-wrap { position: relative; display: flex; align-items: center; }
 .search-icon { position: absolute; left: 14px; width: 18px; height: 18px; color: var(--gray-500); pointer-events: none; }
-#video-search, #room-id-input, #chat-input { width: 100%; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 9999px; color: var(--white); font-size: 14px; padding: 11px 16px 11px 44px; outline: none; }
+#video-search, #room-id-input, #party-name-input, #chat-input { width: 100%; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 9999px; color: var(--white); font-size: 14px; padding: 11px 16px 11px 44px; outline: none; }
 #video-player-section { margin-bottom: 16px; }
 #video-container { position: relative; width: 100%; aspect-ratio: 16/9; background: var(--gray-900); border-radius: 14px; overflow: hidden; border: 1px solid var(--glass-border); }
 #main-video { width: 100%; height: 100%; object-fit: contain; }

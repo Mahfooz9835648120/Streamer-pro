@@ -88,8 +88,20 @@ export function initControls(video) {
   });
 
   // ——— Skip buttons ———
-  skipBackBtn?.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime -= 10; flashIcon(container, '-10s'); });
-  skipFwdBtn?.addEventListener('click',  (e) => { e.stopPropagation(); video.currentTime += 10; flashIcon(container, '+10s'); });
+  skipBackBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!canControlPlayback()) return;
+    video.currentTime -= 10;
+    EventBus.emit(EVENTS.VIDEO_SEEK, { time: video.currentTime });
+    flashIcon(container, '-10s');
+  });
+  skipFwdBtn?.addEventListener('click',  (e) => {
+    e.stopPropagation();
+    if (!canControlPlayback()) return;
+    video.currentTime += 10;
+    EventBus.emit(EVENTS.VIDEO_SEEK, { time: video.currentTime });
+    flashIcon(container, '+10s');
+  });
 
   // ——— Seek bar ———
   function updateSeekBar(progress, buffered) {
@@ -111,6 +123,7 @@ export function initControls(video) {
 
   // Seek bar click/drag
   function seekTo(e) {
+    if (!canControlPlayback()) return;
     const rect = seekBar.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
@@ -118,6 +131,7 @@ export function initControls(video) {
     updateSeekBar(pct, getState('video.buffered') || 0);
     // Emit for teleparty sync
     EventBus.emit(EVENTS.PARTY_SEEK, { time: video.currentTime });
+    EventBus.emit(EVENTS.VIDEO_SEEK, { time: video.currentTime });
   }
 
   seekBar?.addEventListener('mousedown', (e) => {
@@ -172,8 +186,20 @@ export function initControls(video) {
     switch (e.key) {
       case ' ':
       case 'k': e.preventDefault(); togglePlay(video, container); break;
-      case 'ArrowLeft':  e.preventDefault(); video.currentTime -= 10; flashIcon(container, '-10s'); break;
-      case 'ArrowRight': e.preventDefault(); video.currentTime += 10; flashIcon(container, '+10s'); break;
+      case 'ArrowLeft':
+        if (!canControlPlayback()) return;
+        e.preventDefault();
+        video.currentTime -= 10;
+        EventBus.emit(EVENTS.VIDEO_SEEK, { time: video.currentTime });
+        flashIcon(container, '-10s');
+        break;
+      case 'ArrowRight':
+        if (!canControlPlayback()) return;
+        e.preventDefault();
+        video.currentTime += 10;
+        EventBus.emit(EVENTS.VIDEO_SEEK, { time: video.currentTime });
+        flashIcon(container, '+10s');
+        break;
       case 'm': video.muted = !video.muted; break;
       case 'f': fullscreenBtn?.click(); break;
     }
@@ -181,6 +207,7 @@ export function initControls(video) {
 }
 
 function togglePlay(video, container) {
+  if (!canControlPlayback()) return;
   if (video.paused) {
     video.play().catch(() => {});
     EventBus.emit(EVENTS.PARTY_PLAY, {});
@@ -190,4 +217,14 @@ function togglePlay(video, container) {
     EventBus.emit(EVENTS.PARTY_PAUSE, {});
     flashIcon(container, 'PAUSE');
   }
+}
+
+function canControlPlayback() {
+  const inRoom = !!getState('party.roomId');
+  const isHost = !!getState('party.isHost');
+  if (inRoom && !isHost) {
+    EventBus.emit(EVENTS.TOAST, { msg: 'Only the host can control playback in this room.' });
+    return false;
+  }
+  return true;
 }

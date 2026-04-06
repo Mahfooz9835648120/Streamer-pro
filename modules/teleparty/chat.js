@@ -11,7 +11,7 @@ export function initChat() {
   const sendBtn    = document.getElementById('send-chat-btn');
 
   // Receive chat messages
-  EventBus.on(EVENTS.PARTY_CHAT, ({ user, text, system }) => {
+  EventBus.on(EVENTS.PARTY_CHAT, ({ user, name, text, system }) => {
     if (!messagesEl) return;
     const isMe = user === getState('party.userId');
 
@@ -21,7 +21,8 @@ export function initChat() {
     if (system) {
       el.textContent = text;
     } else {
-      el.innerHTML = `<div class="chat-user">${isMe ? 'You' : user?.slice(0, 6) || 'User'}</div>${escapeHtml(text)}`;
+      const displayName = isMe ? 'You' : (name?.trim() || user?.slice(0, 6) || 'User');
+      el.innerHTML = `<div class="chat-user">${escapeHtml(displayName)}</div>${escapeHtml(text)}`;
     }
 
     messagesEl.appendChild(el);

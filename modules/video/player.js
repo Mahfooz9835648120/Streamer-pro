@@ -134,6 +134,7 @@ export async function loadVideo({ src, title = 'Untitled', thumbnail = null, sta
   if (hlsBadge) hlsBadge.style.display = 'none';
   if (qualityBadge) qualityBadge.textContent = 'AUTO';
   if (formatBadge) formatBadge.textContent = getFormatLabel(src);
+  EventBus.emit(EVENTS.VIDEO_SOURCE, { src, title, thumbnail, startTime });
   const format = detectStreamFormat(src);
   console.log(`[VideoPlayer] Detected format: ${format.toUpperCase()} for ${src}`);
   if (format === 'youtube' || format === 'page') {

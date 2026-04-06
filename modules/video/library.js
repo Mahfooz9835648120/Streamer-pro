@@ -2,8 +2,8 @@
  * Video Library — Fetches content from backend API and renders cards.
  * Merges public server videos with admin-added public streams.
  */
-import { EventBus } from '../utils/eventBus.js';
-import { loadHistory } from '../utils/state.js';
+import { EventBus, EVENTS } from '../utils/eventBus.js';
+import { getState, loadHistory } from '../utils/state.js';
 import { loadVideo } from './player.js';
 import { getAdminVideos } from './admin.js';
 
@@ -65,6 +65,10 @@ function renderLibrary(videos, query = '') {
   }).join('');
   grid.querySelectorAll('.video-card').forEach(card => {
     card.addEventListener('click', () => {
+      if (getState('party.roomId') && !getState('party.isHost')) {
+        EventBus.emit(EVENTS.TOAST, { msg: 'Only the room host can change videos.' });
+        return;
+      }
       loadVideo({ src: card.dataset.src, title: card.dataset.title, thumbnail: card.dataset.thumb || null, startTime: parseFloat(card.dataset.time) || 0 });
       document.getElementById('video-player-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
