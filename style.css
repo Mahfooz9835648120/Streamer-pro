@@ -27,7 +27,7 @@
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; background: #000; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif; background: #000; color: #fff; min-height: 100dvh; overflow-x: hidden; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif; background: #000; color: #fff; min-height: 100dvh; overflow: hidden; }
 button { cursor: pointer; border: none; background: none; font-family: inherit; color: inherit; }
 input { font-family: inherit; }
 img, video { display: block; max-width: 100%; }
@@ -41,13 +41,13 @@ svg { display: block; }
 .header-right { display: flex; gap: 8px; }
 .icon-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; color: var(--gray-300); }
 .icon-btn:hover { background: var(--glass-bg); color: var(--white); }
-#main-content { flex: 1; overflow: hidden; }
-.mode-section { display: none; padding: 16px 16px 0; min-height: calc(100dvh - var(--header-height) - var(--nav-height)); }
+#main-content { flex: 1; overflow: hidden; height: calc(100dvh - var(--header-height) - var(--nav-height)); }
+.mode-section { display: none; padding: 16px 16px 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .mode-section.active { display: block; }
 .content-bar { margin-bottom: 16px; }
 .search-wrap { position: relative; display: flex; align-items: center; }
 .search-icon { position: absolute; left: 14px; width: 18px; height: 18px; color: var(--gray-500); pointer-events: none; }
-#video-search, #room-id-input, #chat-input { width: 100%; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 9999px; color: var(--white); font-size: 14px; padding: 11px 16px 11px 44px; outline: none; }
+#video-search, #room-id-input, #party-name-input, #chat-input, #music-url-input { width: 100%; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 9999px; color: var(--white); font-size: 14px; padding: 11px 16px 11px 44px; outline: none; }
 #video-player-section { margin-bottom: 16px; }
 #video-container { position: relative; width: 100%; aspect-ratio: 16/9; background: var(--gray-900); border-radius: 14px; overflow: hidden; border: 1px solid var(--glass-border); }
 #main-video { width: 100%; height: 100%; object-fit: contain; }
