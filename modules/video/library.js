@@ -3,7 +3,7 @@
  * Merges public server videos with admin-added public streams.
  */
 import { EventBus, EVENTS } from '../utils/eventBus.js';
-import { getState, loadHistory, saveHistory } from '../utils/state.js';
+import { getState, loadHistory } from '../utils/state.js';
 import { loadVideo } from './player.js';
 import { getAdminVideos } from './admin.js';
 
@@ -11,9 +11,9 @@ let allVideos = [];
 
 export async function initLibrary() {
   loadHistory();
+  removeHistoryUi();
   await fetchVideos();
   renderLibrary(allVideos);
-  renderHistory();
 
   const searchInput = document.getElementById('video-search');
   let searchTimer = null;
@@ -33,17 +33,6 @@ export async function initLibrary() {
     renderLibrary(allVideos);
   });
 
-  EventBus.on(EVENTS.PANEL_OPEN, (panelId) => {
-    if (panelId === 'history-panel') renderHistory();
-  });
-
-  EventBus.on(EVENTS.VIDEO_ENDED, () => renderHistory());
-  document.getElementById('clear-history-btn')?.addEventListener('click', () => {
-    getState('history').length = 0;
-    saveHistory();
-    renderHistory();
-    EventBus.emit(EVENTS.TOAST, { msg: '✓ History cleared' });
-  });
 }
 
 async function fetchVideos() {
@@ -67,41 +56,28 @@ function renderLibrary(videos, query = '') {
     grid.innerHTML = `<div class="library-empty">${query ? `No results for "<em>${query}</em>"` : 'No videos available.'}</div>`;
     return;
   }
-  const history = getState('history');
   grid.innerHTML = videos.map(v => {
-    const hist = history.find(h => h.src === v.src);
-    const progress = hist?.duration > 0 ? Math.min(hist.currentTime / hist.duration, 1) : 0;
-    const isContinue = progress > 0.05 && progress < 0.95;
     const isAdmin = v.id?.startsWith('admin-');
-    return `<div class="video-card${isContinue ? ' continue-watching' : ''}${isAdmin ? ' admin-card' : ''}" data-src="${escapeAttr(v.src)}" data-title="${escapeAttr(v.title)}" data-thumb="${escapeAttr(v.thumbnail || '')}" data-time="${hist?.currentTime || 0}">
-      <div class="video-thumb">${v.thumbnail ? `<img src="${escapeAttr(v.thumbnail)}" alt="${escapeAttr(v.title)}" loading="lazy" />` : `<div class="video-thumb-placeholder">▶</div>`}${isContinue ? `<div class="continue-bar"><div class="continue-bar-fill" style="width:${progress * 100}%"></div></div>` : ''}<span class="format-badge">${v.format || 'STREAM'}</span>${isAdmin ? '<span class="admin-badge">Custom</span>' : ''}</div>
-      <div class="video-card-body"><p class="video-card-title">${v.title}</p><p class="video-card-meta">${v.duration || '--'}${isContinue ? ' · Continue' : ''}</p></div>
+    return `<div class="video-card${isAdmin ? ' admin-card' : ''}" data-src="${escapeAttr(v.src)}" data-title="${escapeAttr(v.title)}" data-thumb="${escapeAttr(v.thumbnail || '')}" data-time="0">
+      <div class="video-thumb">${v.thumbnail ? `<img src="${escapeAttr(v.thumbnail)}" alt="${escapeAttr(v.title)}" loading="lazy" />` : `<div class="video-thumb-placeholder">▶</div>`}<span class="format-badge">${v.format || 'STREAM'}</span>${isAdmin ? '<span class="admin-badge">Custom</span>' : ''}</div>
+      <div class="video-card-body"><p class="video-card-title">${v.title}</p><p class="video-card-meta">${v.duration || '--'}</p></div>
     </div>`;
   }).join('');
   grid.querySelectorAll('.video-card').forEach(card => {
     card.addEventListener('click', () => {
+      if (getState('party.roomId') && !getState('party.isHost')) {
+        EventBus.emit(EVENTS.TOAST, { msg: 'Only the room host can change videos.' });
+        return;
+      }
       loadVideo({ src: card.dataset.src, title: card.dataset.title, thumbnail: card.dataset.thumb || null, startTime: parseFloat(card.dataset.time) || 0 });
       document.getElementById('video-player-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 }
 
-function renderHistory() {
-  const list = document.getElementById('history-list');
-  if (!list) return;
-  const history = getState('history');
-  if (!history.length) {
-    list.innerHTML = `<p style="text-align:center;color:var(--gray-600);font-size:13px">No watch history yet.</p>`;
-    return;
-  }
-  list.innerHTML = history.slice(0, 20).map(h => `<div class="history-item" data-src="${escapeAttr(h.src)}" data-title="${escapeAttr(h.title)}" data-time="${h.currentTime || 0}" data-thumb="${escapeAttr(h.thumbnail || '')}"><div class="history-thumb">${h.thumbnail ? `<img src="${escapeAttr(h.thumbnail)}" alt="" />` : '▶'}</div><div class="history-info"><p class="history-title">${h.title || 'Untitled'}</p><p class="history-meta">${new Date(h.visitedAt).toLocaleDateString()}</p></div>${Math.round((h.duration > 0 ? Math.min(h.currentTime / h.duration, 1) : 0) * 100) > 5 ? `<span class="continue-pill">${Math.round((h.duration > 0 ? Math.min(h.currentTime / h.duration, 1) : 0) * 100)}%</span>` : ''}</div>`).join('');
-  list.querySelectorAll('.history-item').forEach(el => {
-    el.addEventListener('click', () => {
-      loadVideo({ src: el.dataset.src, title: el.dataset.title, thumbnail: el.dataset.thumb || null, startTime: parseFloat(el.dataset.time) || 0 });
-      document.getElementById('close-history-btn')?.click();
-      document.querySelector('.nav-btn[data-mode="video"]')?.click();
-    });
-  });
+function removeHistoryUi() {
+  document.getElementById('history-btn')?.remove();
+  document.getElementById('history-panel')?.remove();
 }
 
 function escapeAttr(str) {

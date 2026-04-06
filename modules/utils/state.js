@@ -39,6 +39,8 @@ const _state = {
     connected: false,
     roomId: null,
     userId: null,
+    userName: '',
+    hostId: null,
     members: 0,
     isHost: false,
     isSyncing: false,

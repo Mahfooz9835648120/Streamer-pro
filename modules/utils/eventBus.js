@@ -43,6 +43,7 @@ export const EVENTS = {
   VIDEO_TIME:    'video:time',
   VIDEO_BUFFER:  'video:buffer',
   VIDEO_ERROR:   'video:error',
+  VIDEO_SOURCE:  'video:source',
 
   // Music
   MUSIC_PLAY:    'music:play',
@@ -60,6 +61,8 @@ export const EVENTS = {
   PARTY_JOIN:    'party:join',
   PARTY_LEAVE:   'party:leave',
   PARTY_MEMBERS: 'party:members',
+  PARTY_HOST:    'party:host',
+  PARTY_STATE:   'party:state',
 
   // UI
   MODE_CHANGE:   'ui:modeChange',
