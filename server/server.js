@@ -5,6 +5,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { initSocket } from './socket.js';
@@ -83,13 +84,15 @@ app.get('/api/content/:id', (req, res) => {
 
 if (isProd) {
   const distPath = path.join(__dirname, '..', 'dist');
-  app.use(express.static(distPath));
+  const hasDist = fs.existsSync(path.join(distPath, 'index.html'));
+  const staticRoot = hasDist ? distPath : path.join(__dirname, '..');
+  app.use(express.static(staticRoot));
   app.get(['/admin', '/admin.html'], (req, res) => {
-    res.sendFile(path.join(distPath, 'admin.html'));
+    res.sendFile(path.join(staticRoot, 'admin.html'));
   });
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api') && !req.path.startsWith('/ws')) {
-      res.sendFile(path.join(distPath, 'index.html'));
+      res.sendFile(path.join(staticRoot, 'index.html'));
     }
   });
 }
