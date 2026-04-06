@@ -110,6 +110,7 @@ function injectMusicUrlForm() {
   const fileBtn = form.querySelector('#music-file-add-btn');
   addBtn?.addEventListener('click', () => {
     if (!canControlMusic()) return;
+  addBtn?.addEventListener('click', () => {
     const src = input?.value?.trim();
     if (!src) {
       EventBus.emit(EVENTS.TOAST, { msg: 'Enter a music stream URL first.' });
