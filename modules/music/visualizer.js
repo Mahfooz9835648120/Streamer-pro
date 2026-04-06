@@ -7,7 +7,9 @@ import { getState } from '../utils/state.js';
 
 let canvas, ctx, analyser;
 let animId = null;
-let dpr = 1;
+let resizeObserver = null;
+let visibilityObserver = null;
+let isVisible = true;
 
 export function initVisualizer(analyserNode) {
   canvas  = document.getElementById('visualizer');
@@ -18,6 +20,7 @@ export function initVisualizer(analyserNode) {
   dpr = window.devicePixelRatio || 1;
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas, { passive: true });
+  setupVisibilityObservers();
 
   if (animId) cancelAnimationFrame(animId);
   draw();
@@ -25,16 +28,38 @@ export function initVisualizer(analyserNode) {
 
 function resizeCanvas() {
   if (!canvas) return;
-  dpr = window.devicePixelRatio || 1;
-  // Physical pixels = CSS pixels × dpr
-  canvas.width  = Math.round(canvas.offsetWidth  * dpr);
-  canvas.height = Math.round(canvas.offsetHeight * dpr);
-  // No ctx.scale() here — draw() uses canvas.width/height directly
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.max(1, Math.floor(canvas.offsetWidth * dpr));
+  const height = Math.max(1, Math.floor(canvas.offsetHeight * dpr));
+  if (canvas.width === width && canvas.height === height) return;
+  canvas.width = width;
+  canvas.height = height;
+  if (!ctx) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+}
+
+function setupVisibilityObservers() {
+  if (!canvas) return;
+  resizeObserver?.disconnect();
+  visibilityObserver?.disconnect();
+  if (window.ResizeObserver) {
+    resizeObserver = new ResizeObserver(() => resizeCanvas());
+    resizeObserver.observe(canvas);
+  }
+
+  if (window.IntersectionObserver) {
+    visibilityObserver = new IntersectionObserver((entries) => {
+      isVisible = !!entries[0]?.isIntersecting;
+    }, { threshold: 0.05 });
+    visibilityObserver.observe(canvas);
+  }
 }
 
 function draw() {
   animId = requestAnimationFrame(draw);
-  if (!ctx || !analyser || !canvas) return;
+  if (!ctx || !analyser) return;
+  if (!isVisible || document.hidden) return;
 
   // Work in physical pixel space (canvas.width × canvas.height)
   const W = canvas.width;
@@ -59,29 +84,22 @@ function draw() {
     ctx.fillStyle = `rgba(255,255,255,${alpha})`;
     const x = i * (barW + gap);
     const y = H - barH;
-    // Rounded tops
-    ctx.beginPath();
-    const r = Math.min(barW / 2, 3 * dpr);
-    ctx.roundRect(x, y, barW, barH, [r, r, 0, 0]);
-    ctx.fill();
+
+    // Rounded top bars (fallback for browsers without roundRect)
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, barH, [2, 2, 0, 0]);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x, y, barW, barH);
+    }
   }
 
-  // Reflection (save/restore so transforms don't accumulate)
-  ctx.save();
-  ctx.scale(1, -1);
-  ctx.translate(0, -H);
-  ctx.globalAlpha = 0.12;
-  for (let i = 0; i < barCount; i++) {
-    const value = dataArr[i * step] / 255;
-    const barH  = Math.max(1, value * H * 0.28);
-    const x = i * (barW + gap);
-    const y = H - barH;
-    ctx.fillStyle = `rgba(255,255,255,${0.2 + value * 0.4})`;
-    ctx.fillRect(x, y, barW, barH);
-  }
-  ctx.restore();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 export function stopVisualizer() {
   if (animId) { cancelAnimationFrame(animId); animId = null; }
+  resizeObserver?.disconnect();
+  visibilityObserver?.disconnect();
 }

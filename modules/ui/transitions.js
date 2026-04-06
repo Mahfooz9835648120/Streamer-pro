@@ -52,23 +52,32 @@ export function ripple(container, x, y, color = 'rgba(255,255,255,0.15)') {
   el.addEventListener('animationend', () => el.remove(), { once: true });
 }
 
-/** Show a brief icon flash in the center of the video */
-export function flashIcon(container, emoji) {
+/** Show a brief monochrome flash in the center of the video */
+export function flashIcon(container, label) {
   const el = document.createElement('div');
   el.style.cssText = `
     position: absolute;
     top: 50%; left: 50%;
-    transform: translate(-50%, -50%) scale(0.5);
-    font-size: 48px;
+    transform: translate(-50%, -50%) scale(0.85);
+    min-width: 78px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.26);
+    background: rgba(15,15,15,0.72);
+    color: rgba(255,255,255,0.95);
+    text-align: center;
+    letter-spacing: 0.08em;
+    font-size: 12px;
+    font-weight: 700;
     pointer-events: none;
     z-index: 20;
-    animation: flashIconAnim 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards;
+    animation: flashIconAnim 0.42s cubic-bezier(0.34,1.56,0.64,1) forwards;
   `;
-  el.textContent = emoji;
+  el.textContent = label;
   if (!document.getElementById('flash-style')) {
     const style = document.createElement('style');
     style.id = 'flash-style';
-    style.textContent = '@keyframes flashIconAnim { 50% { transform: translate(-50%,-50%) scale(1.2); opacity:1; } to { transform: translate(-50%,-50%) scale(0.8); opacity:0; } }';
+    style.textContent = '@keyframes flashIconAnim { 45% { transform: translate(-50%,-50%) scale(1); opacity:1; } to { transform: translate(-50%,-50%) scale(0.92); opacity:0; } }';
     document.head.appendChild(style);
   }
   container.appendChild(el);
