@@ -53,23 +53,43 @@ export function initControls(video) {
   // ——— Tap overlay (tap to play/pause, double-tap to seek) ———
   const tapOverlay = document.getElementById('tap-overlay');
   let lastTap = 0;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchMoved = false;
+  tapOverlay?.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchMoved = false;
+  }, { passive: true });
+  tapOverlay?.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1) return;
+    const dx = Math.abs(e.touches[0].clientX - touchStartX);
+    const dy = Math.abs(e.touches[0].clientY - touchStartY);
+    if (dx > 8 || dy > 8) touchMoved = true;
+  }, { passive: true });
   tapOverlay?.addEventListener('click', (e) => {
+    if (!('ontouchstart' in window)) {
+      showControls();
+      return;
+    }
+    if (touchMoved) return;
     const now = Date.now();
     if (now - lastTap < 300) {
       // Double-tap: seek based on side
       const side = e.clientX < window.innerWidth / 2 ? 'left' : 'right';
       video.currentTime += side === 'left' ? -10 : 10;
-      flashIcon(container, side === 'left' ? '⏪' : '⏩');
+      flashIcon(container, side === 'left' ? '-10s' : '+10s');
     } else {
-      togglePlay(video, container);
+      // Single tap should only reveal controls; avoid accidental play/pause toggles.
+      showControls();
     }
     lastTap = now;
-    showControls();
   });
 
   // ——— Skip buttons ———
-  skipBackBtn?.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime -= 10; flashIcon(container, '⏪'); });
-  skipFwdBtn?.addEventListener('click',  (e) => { e.stopPropagation(); video.currentTime += 10; flashIcon(container, '⏩'); });
+  skipBackBtn?.addEventListener('click', (e) => { e.stopPropagation(); video.currentTime -= 10; flashIcon(container, '-10s'); });
+  skipFwdBtn?.addEventListener('click',  (e) => { e.stopPropagation(); video.currentTime += 10; flashIcon(container, '+10s'); });
 
   // ——— Seek bar ———
   function updateSeekBar(progress, buffered) {
@@ -125,6 +145,16 @@ export function initControls(video) {
       document.exitFullscreen?.() || document.webkitExitFullscreen?.();
     }
   });
+  document.addEventListener('fullscreenchange', async () => {
+    const orientation = screen.orientation;
+    if (!orientation?.lock) return;
+    try {
+      if (document.fullscreenElement) await orientation.lock('landscape');
+      else orientation.unlock?.();
+    } catch {
+      // Some browsers block orientation lock; ignore gracefully.
+    }
+  });
 
   // ——— Play/pause icon sync ———
   EventBus.on(EVENTS.VIDEO_PLAY,  () => { if (playIcon) playIcon.style.display = 'none'; if (pauseIcon) pauseIcon.style.display = ''; });
@@ -142,8 +172,8 @@ export function initControls(video) {
     switch (e.key) {
       case ' ':
       case 'k': e.preventDefault(); togglePlay(video, container); break;
-      case 'ArrowLeft':  e.preventDefault(); video.currentTime -= 10; flashIcon(container, '⏪'); break;
-      case 'ArrowRight': e.preventDefault(); video.currentTime += 10; flashIcon(container, '⏩'); break;
+      case 'ArrowLeft':  e.preventDefault(); video.currentTime -= 10; flashIcon(container, '-10s'); break;
+      case 'ArrowRight': e.preventDefault(); video.currentTime += 10; flashIcon(container, '+10s'); break;
       case 'm': video.muted = !video.muted; break;
       case 'f': fullscreenBtn?.click(); break;
     }
@@ -154,10 +184,10 @@ function togglePlay(video, container) {
   if (video.paused) {
     video.play().catch(() => {});
     EventBus.emit(EVENTS.PARTY_PLAY, {});
-    flashIcon(container, '▶');
+    flashIcon(container, 'PLAY');
   } else {
     video.pause();
     EventBus.emit(EVENTS.PARTY_PAUSE, {});
-    flashIcon(container, '⏸');
+    flashIcon(container, 'PAUSE');
   }
 }

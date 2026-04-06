@@ -5,6 +5,9 @@ import { getState } from '../utils/state.js';
 
 let canvas, ctx, analyser;
 let animId = null;
+let resizeObserver = null;
+let visibilityObserver = null;
+let isVisible = true;
 
 export function initVisualizer(analyserNode) {
   canvas  = document.getElementById('visualizer');
@@ -14,6 +17,7 @@ export function initVisualizer(analyserNode) {
   ctx = canvas.getContext('2d');
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas, { passive: true });
+  setupVisibilityObservers();
 
   // Start drawing
   if (animId) cancelAnimationFrame(animId);
@@ -23,14 +27,37 @@ export function initVisualizer(analyserNode) {
 function resizeCanvas() {
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
-  canvas.width  = canvas.offsetWidth  * dpr;
-  canvas.height = canvas.offsetHeight * dpr;
-  ctx?.scale(dpr, dpr);
+  const width = Math.max(1, Math.floor(canvas.offsetWidth * dpr));
+  const height = Math.max(1, Math.floor(canvas.offsetHeight * dpr));
+  if (canvas.width === width && canvas.height === height) return;
+  canvas.width = width;
+  canvas.height = height;
+  if (!ctx) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+}
+
+function setupVisibilityObservers() {
+  if (!canvas) return;
+  resizeObserver?.disconnect();
+  visibilityObserver?.disconnect();
+  if (window.ResizeObserver) {
+    resizeObserver = new ResizeObserver(() => resizeCanvas());
+    resizeObserver.observe(canvas);
+  }
+
+  if (window.IntersectionObserver) {
+    visibilityObserver = new IntersectionObserver((entries) => {
+      isVisible = !!entries[0]?.isIntersecting;
+    }, { threshold: 0.05 });
+    visibilityObserver.observe(canvas);
+  }
 }
 
 function draw() {
   animId = requestAnimationFrame(draw);
   if (!ctx || !analyser) return;
+  if (!isVisible || document.hidden) return;
 
   const W = canvas.offsetWidth;
   const H = canvas.offsetHeight;
@@ -80,4 +107,6 @@ function draw() {
 
 export function stopVisualizer() {
   if (animId) { cancelAnimationFrame(animId); animId = null; }
+  resizeObserver?.disconnect();
+  visibilityObserver?.disconnect();
 }

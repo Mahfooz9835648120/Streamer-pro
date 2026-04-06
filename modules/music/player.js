@@ -15,6 +15,7 @@ let freqTimer = null;
 
 export function initMusicPlayer() {
   if (!audio) return;
+  injectSupportedFormats();
 
   audio.addEventListener('play', () => { setState('music.isPlaying', true); EventBus.emit(EVENTS.MUSIC_PLAY, {}); updatePlayUI(true); });
   audio.addEventListener('pause', () => { setState('music.isPlaying', false); EventBus.emit(EVENTS.MUSIC_PAUSE, {}); updatePlayUI(false); });
@@ -25,6 +26,9 @@ export function initMusicPlayer() {
     const durEl = document.getElementById('music-duration');
     if (durEl) durEl.textContent = formatTime(audio.duration);
     updateAlbumRing(true);
+  });
+  audio.addEventListener('error', () => {
+    EventBus.emit(EVENTS.TOAST, { msg: '⚠ Unsupported audio stream. Try MP3, AAC, OGG, WAV, FLAC, HLS, or DASH.' });
   });
 
   document.getElementById('music-play-btn')?.addEventListener('click', togglePlay);
@@ -56,6 +60,26 @@ export function initMusicPlayer() {
 
   renderPlaylist();
   if (playlist.length) loadTrack(0);
+}
+
+function injectSupportedFormats() {
+  const musicMode = document.getElementById('music-mode');
+  if (!musicMode || document.getElementById('music-supported-formats')) return;
+  const support = document.createElement('div');
+  support.id = 'music-supported-formats';
+  support.className = 'stream-info';
+  support.style.marginBottom = '12px';
+  support.innerHTML = `
+    <span class="badge">MUSIC SUPPORT</span>
+    <span class="badge dim">MP3</span>
+    <span class="badge dim">AAC</span>
+    <span class="badge dim">OGG</span>
+    <span class="badge dim">WAV</span>
+    <span class="badge dim">FLAC</span>
+    <span class="badge dim">HLS</span>
+    <span class="badge dim">DASH</span>
+  `;
+  musicMode.prepend(support);
 }
 
 function onTimeUpdate() {

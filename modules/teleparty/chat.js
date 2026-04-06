@@ -38,13 +38,6 @@ export function initChat() {
     if (!text) return;
     sendChatMsg(text);
     inputEl.value = '';
-
-    // Optimistically show own message
-    EventBus.emit(EVENTS.PARTY_CHAT, {
-      user: getState('party.userId'),
-      text,
-      system: false,
-    });
   }
 }
 

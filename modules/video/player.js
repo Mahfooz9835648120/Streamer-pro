@@ -3,7 +3,7 @@
  * Manages watch history and continue-watching.
  */
 import { EventBus, EVENTS } from '../utils/eventBus.js';
-import { getState, setState, addToHistory } from '../utils/state.js';
+import { getState, setState } from '../utils/state.js';
 import { HLSEngine } from '../engine/hlsEngine.js';
 import { DASHEngine } from '../engine/dashEngine.js';
 import { ChunkEngine } from '../engine/chunkEngine.js';
@@ -40,10 +40,6 @@ function onTimeUpdate() {
   setState('video.currentTime', ct);
   setState('video.duration', dur);
   EventBus.emit(EVENTS.VIDEO_TIME, { currentTime: ct, duration: dur });
-  if (Math.floor(ct) % 5 === 0 && ct > 2) {
-    const src = getState('video.src');
-    if (src) addToHistory({ src, title: getState('video.title'), currentTime: ct, duration: dur });
-  }
 }
 
 function onProgress() {
@@ -138,7 +134,6 @@ export async function loadVideo({ src, title = 'Untitled', thumbnail = null, sta
   if (hlsBadge) hlsBadge.style.display = 'none';
   if (qualityBadge) qualityBadge.textContent = 'AUTO';
   if (formatBadge) formatBadge.textContent = getFormatLabel(src);
-  addToHistory({ src, title, thumbnail, currentTime: 0, duration: 0 });
   const format = detectStreamFormat(src);
   console.log(`[VideoPlayer] Detected format: ${format.toUpperCase()} for ${src}`);
   if (format === 'youtube' || format === 'page') {
